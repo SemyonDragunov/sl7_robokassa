@@ -1,0 +1,278 @@
+<?php
+
+/**
+ * @author Semyon Dragunov <sam.dragunov@gmail.com>
+ * https://github.com/SemyonDragunov
+ */
+
+define('SL7_ROBOKASSA_PATH', SL7_CONTROL_PANEL_ADMIN_PATH . '/payment/robokassa');
+
+/**
+ * Implements hook_menu()
+ */
+function sl7_robokassa_menu() {
+
+  $items[SL7_ROBOKASSA_PATH] = array(
+    'title' => 'Robokassa',
+    'description' => 'Настройки Robokassa.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('sl7_robokassa_settings_form'),
+    'access arguments' => array('administer sl7_robokassa'),
+  );
+  $items[SL7_ROBOKASSA_PATH . '/settings'] = array(
+    'title' => t('Settings'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items[SL7_ROBOKASSA_PATH . '/success'] = array(
+    'title' => 'Успешная оплата',
+    'description' => 'Настройки страницы успешной оплаты.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('sl7_robokassa_success_settings_form'),
+    'access arguments' => array('administer sl7_robokassa'),
+    'type' => MENU_LOCAL_TASK,
+  );
+  $items[SL7_ROBOKASSA_PATH . '/fail'] = array(
+    'title' => 'Неудачная оплата',
+    'description' => 'Настройки страницы неудачной оплаты.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('sl7_robokassa_fail_settings_form'),
+    'access arguments' => array('administer sl7_robokassa'),
+    'type' => MENU_LOCAL_TASK,
+  );
+  $items['sl7/robokassa/result'] = array(
+    'title' => 'Result',
+    'page callback' => 'sl7_robokassa_result',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+  $items['sl7/robokassa/success'] = array(
+    'title' => 'Успешная оплата',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_sl7_robokassa_get_status_page', 2),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['sl7/robokassa/fail'] = array(
+    'title' => 'Оплата не произведена',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_sl7_robokassa_get_status_page', 2),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_sl7_payment_info()
+ */
+function sl7_robokassa_sl7_payment_info() {
+
+  $payment['sl7_robokassa'] = array(
+    'controller' => 'SL7RobokassaPaymentController',
+    'callback' => 'sl7_robokassa_callback',
+    'customer' => 'sl7_robokassa_customer_form',
+    'title' => 'Robokassa',
+    'description' => 'Оплата через Robokassa.',
+    'img' => drupal_get_path('module', 'sl7_robokassa') . '/img/robokassa.png',
+    'access' => TRUE,
+  );
+
+  return $payment;
+}
+
+/**
+ * Implement hook_permission()
+ */
+function sl7_robokassa_permission() {
+  return array(
+    'administer sl7_robokassa' => array('title' => 'Управлять настройками Robokassa.'),
+  );
+}
+
+function sl7_robokassa_callback($order) {
+  $ajax = $_GET['q'] == 'system/ajax' ? TRUE : FALSE;
+  sl7_payment_get_controller('sl7_robokassa')->external($order, $ajax);
+}
+
+function sl7_robokassa_result() {
+  drupal_add_http_header('Content-type', 'text/html; charset=iso-8859-1');
+
+  $md5_r = strtoupper($_REQUEST["SignatureValue"]);
+  $sum = $_REQUEST["OutSum"];
+  $id = $_REQUEST["InvId"];
+  $secret_key_2 = variable_get('sl7_robokassa_secret_key_2');
+
+  $mp5 = strtoupper(md5("$sum:$id:$secret_key_2"));
+
+  if ($mp5 == $md5_r) {
+    sl7_order_enroll_check_sum($id, 'sl7_robokassa', $sum);
+  }
+}
+
+function sl7_robokassa_server_name($name = NULL) {
+  $name_all = array(
+    'test' => 'Тестовый',
+    'work' => 'Рабочий',
+  );
+
+  if (array_key_exists($name, $name_all)) {
+    return $name_all[$name];
+  }
+
+  return $name_all;
+}
+
+function sl7_robokassa_server_url($server) {
+  switch ($server) {
+    case 'test':
+      return 'http://test.robokassa.ru/Index.aspx';
+    case 'work':
+      return 'https://auth.robokassa.ru/Merchant/Index.aspx';
+  }
+}
+
+function sl7_robokassa_settings_form($form, &$form_state) {
+
+  $form['sl7_robokassa_login'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Robokassa логин',
+    '#default_value' => variable_get('sl7_robokassa_login', ''),
+    '#size' => 60,
+    '#maxlength' => 255,
+    '#required' => TRUE,
+  );
+  $form['sl7_robokassa_secret_key_1'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Платежный пароль 1',
+    '#default_value' => variable_get('sl7_robokassa_secret_key_1', ''),
+    '#size' => 40,
+    '#maxlength' => 100,
+    '#required' => TRUE,
+  );
+  $form['sl7_robokassa_secret_key_2'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Платежный пароль 2',
+    '#default_value' => variable_get('sl7_robokassa_secret_key_2', ''),
+    '#size' => 40,
+    '#maxlength' => 100,
+    '#required' => TRUE,
+  );
+  $form['sl7_robokassa_curr_label'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Способ оплаты',
+    '#default_value' => variable_get('sl7_robokassa_curr_label', ''),
+    '#description' => "Выберите способ оплаты. Если оставить поле пустым, то покупатель сам будет выбирать способ оплаты.<br /><a href=\"https://merchant.roboxchange.com/WebService/Service.asmx/GetCurrencies?MerchantLogin=demo&Language=ru\">Все доступные способы оплаты тут.</a>",
+    '#size' => 40,
+    '#maxlength' => 100,
+    '#required' => FALSE
+  );
+  $form['sl7_robokassa_culture'] = array(
+    '#title' => 'Язык платежного сайта',
+    '#type' => 'radios',
+    '#default_value' => variable_get('sl7_robokassa_culture', ''),
+    '#options' => array(
+      'ru' => 'Русский',
+      'en' => 'Английский',
+    ),
+    '#required' => TRUE,
+  );
+  $form['sl7_robokassa_merchant_server_name'] = array(
+    '#title' => 'Адрес платежного шлюза',
+    '#type' => 'radios',
+    '#default_value' => variable_get('sl7_robokassa_merchant_server_name', ''),
+    '#options' => sl7_robokassa_server_name(),
+    '#required' => TRUE,
+  );
+  $form['sl7_robokassa_result_url'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Result URL',
+    '#default_value' => variable_get('sl7_robokassa_result_url', SL7_ROBOKASSA_PATH . '/result'),
+    '#description' => 'Страница-приемщик успешной оплаты. Настоятельно рекомендуется не менять эту страницу. Установите её в настройках магазина в Robokassa.',
+    '#size' => 60,
+    '#maxlength' => 255,
+    '#required' => FALSE
+  );
+  $form['sl7_robokassa_success_url'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Success URL',
+    '#default_value' => variable_get('sl7_robokassa_success_url', SL7_ROBOKASSA_PATH . '/success'),
+    '#description' => 'Страница успешной оплаты.',
+    '#size' => 60,
+    '#maxlength' => 255,
+    '#required' => FALSE
+  );
+  $form['sl7_robokassa_fail_url'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Fail URL',
+    '#default_value' => variable_get('sl7_robokassa_fail_url', SL7_ROBOKASSA_PATH . '/fail'),
+    '#description' => 'Страница неудачной оплаты.',
+    '#size' => 60,
+    '#maxlength' => 255,
+    '#required' => FALSE
+  );
+
+  return system_settings_form($form);
+}
+
+function sl7_robokassa_settings_form_validate($form, &$form_state) {
+  if (!valid_url($form_state['values']['sl7_robokassa_result_url'])) {
+    form_set_error('sl7_robokassa_result_url', 'Не верный адрес страницы.');
+  }
+  if (!valid_url($form_state['values']['sl7_robokassa_success_url'])) {
+    form_set_error('sl7_robokassa_success_url', 'Не верный адрес страницы.');
+  }
+  if (!valid_url($form_state['values']['sl7_robokassa_fail_url'])) {
+    form_set_error('sl7_robokassa_fail_url', 'Не верный адрес страницы.');
+  }
+}
+
+function sl7_robokassa_success_settings_form($form, &$form_state) {
+
+  $text = variable_get('sl7_robokassa_success_text', '');
+
+  $form['sl7_robokassa_success_text'] = array(
+    '#title' => 'Содержимое страницы',
+    '#type' => 'text_format',
+    '#description' => 'Содержимое страницы успешной оплаты',
+    '#default_value' => $text['value'],
+    '#format' => $text['format'],
+  );
+
+  return system_settings_form($form);
+}
+
+function sl7_robokassa_fail_settings_form($form, &$form_state) {
+
+  $text = variable_get('sl7_robokassa_fail_text', '');
+
+  $form['sl7_robokassa_fail_text'] = array(
+    '#title' => 'Содержимое страницы',
+    '#type' => 'text_format',
+    '#description' => 'Содержимое страницы успешнйо оплаты',
+    '#default_value' => $text['value'],
+    '#format' => $text['format'],
+  );
+
+  return system_settings_form($form);
+}
+
+function _sl7_robokassa_get_status_page($form, &$form_state, $page) {
+  switch ($page) {
+    case 'success':
+      $text = variable_get('sl7_robokassa_success_text', array('value' => '', 'format' => 'filtered_html'));
+      break;
+
+    case 'fail':
+      $text = variable_get('sl7_robokassa_fail_text', array('value' => '', 'format' => 'filtered_html'));
+      break;
+  }
+
+  $form['text'] = array(
+    '#type' => 'item',
+    '#markup' => check_markup($text['value'], $text['format']),
+  );
+
+  return $form;
+}

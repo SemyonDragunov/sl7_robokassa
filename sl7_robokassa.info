@@ -1,0 +1,13 @@
+name = Robokassa
+description = Модуль оплаты через Robokassa.
+package = SL7
+version = 7.x-1.0
+core = 7.x
+
+configure = admin/control-panel/payment/robokassa
+
+files[] = includes/sl7_robokassa.controller.inc
+
+dependencies[] = sl7_control_panel
+dependencies[] = sl7_payment
+dependencies[] = entityreference

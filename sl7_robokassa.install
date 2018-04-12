@@ -1,0 +1,27 @@
+<?php
+
+/**
+ * @author Semyon Dragunov <sam.dragunov@gmail.com>
+ * https://github.com/SemyonDragunov
+ */
+
+function sl7_robokassa_install() {
+  variable_set('sl7_robokassa_merchant_server_name', 'work');
+  variable_set('sl7_robokassa_culture', 'ru');
+  variable_set('sl7_robokassa_result_url', 'sl7/robokassa/result');
+  variable_set('sl7_robokassa_success_url', 'sl7/robokassa/success');
+  variable_set('sl7_robokassa_fail_url', 'sl7/robokassa/fail');
+  variable_set('sl7_robokassa_success_text', array('value' => '<p>Оплата успешно произведена.</p>', 'format' => 'filtered_html'));
+  variable_set('sl7_robokassa_fail_text', array('value' => '<p>Ошибка. Оплата не произведена.</p>', 'format' => 'filtered_html'));
+}
+
+function sl7_robokassa_uninstall() {
+  $result = db_select('variable', 'v')
+    ->fields('v', array('name'))
+    ->condition('name', 'sl7_robokassa_%', 'LIKE')
+    ->execute();
+
+  foreach ($result as $row) {
+    variable_del($row->name);
+  }
+}
